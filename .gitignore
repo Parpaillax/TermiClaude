@@ -13,6 +13,12 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
+# Swift / build de l'app
+app/.build/
+app/HyperClaude.app/
+*.xcodeproj
+*.xcworkspace
+
 # macOS
 .DS_Store
 

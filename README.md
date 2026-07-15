@@ -13,7 +13,7 @@ une action, et basculer vers la bonne fenetre.
 |--------|---------|------|
 | L0 | Socle : collecte + normalisation de l'etat des sessions, mapping vers la fenetre | **fait** |
 | L1 | POC SwiftBar (menu, statuts, highlight, focus best-effort) | **fait** |
-| L2 | App native SwiftUI (badge, FSEvents) + footer d'usage | a venir |
+| L2 | App native AppKit (badge, FSEvents) + footer d'usage | **fait (v1)** |
 | L3 | Plugin Hyper (focus fenetre fiable) | a venir |
 
 ## L0 - Socle de collecte (`hyperclaude/collector.py`)
@@ -100,6 +100,34 @@ l'UI). Source confirmee et testee en live :
 ```bash
 python3 -m hyperclaude.usage      # instantane JSON (peut demander une autorisation Keychain)
 ```
+
+## L2 - App native de barre de menus (`app/`)
+
+App AppKit (`NSStatusItem`) qui **reutilise le coeur Python** (une seule source de verite) :
+elle invoque `python3 -m hyperclaude` (sessions) et `python3 -m hyperclaude.usage` (quota),
+et rend un menu natif.
+
+- **Icone** : symbole neutre ; compteur orange (`N`) des qu'une session attend.
+- **Menu** : une entree par session (puce coloree, details en info-bulle : dossier, tty,
+  attente) ; clic = focus best-effort (active Hyper ; le `tty` est deja porte pour le
+  plugin Hyper de L3).
+- **Footer** : `Session : x %` et `Semaine (all models) : y %` (via `usage.py`), ou
+  `Usage indisponible` a defaut - jamais de valeur inventee.
+- **Reactivite** : FSEvents sur `~/.claude/sessions` (mise a jour quasi-instantanee) +
+  poll de secours (5 s sessions, 45 s usage).
+- App **agent** (`LSUIElement`) : pas d'icone Dock, vit dans la barre de menus.
+
+### Build & lancement
+
+```bash
+bash app/build.sh                       # swift build -c release + bundle .app + signature ad hoc
+open app/HyperClaude.app                # lance le widget
+./app/.build/release/HyperClaude --selftest   # verifie l'integration donnees sans lancer l'UI
+```
+
+Au premier acces au quota, macOS peut demander l'autorisation Keychain (« Toujours
+autoriser »). Une vraie identite de signature (Developer ID) stabilise ce choix ; la
+signature ad hoc du script suffit en dev.
 
 ## Tests
 
