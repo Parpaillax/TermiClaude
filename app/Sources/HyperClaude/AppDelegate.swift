@@ -6,6 +6,8 @@ import CoreServices
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
+    private let menu = NSMenu()
+    private var menuOpen = false
     private var sessions: [Session] = []
     private var usage: Usage?
     private var eventStream: FSEventStreamRef?
@@ -42,14 +44,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             button.imagePosition = .imageOnly
         }
+        menu.delegate = self
+        statusItem.menu = menu
         updateButton()
         rebuildMenu()
         startWatching()
         refreshSessions()
         refreshUsage()
-        // Filet de securite si FSEvents rate un evenement ; l'usage bouge lentement.
+        // Filet de securite si FSEvents rate un evenement (sauf menu ouvert, pour ne pas le perturber).
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            self?.refreshSessions()
+            self?.autoRefresh()
         }
         // L'endpoint d'usage est fortement rate-limite : on l'interroge avec parcimonie.
         usageTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
@@ -58,6 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Rafraichissement
+
+    /// Rafraichissement automatique (timer / FSEvents) : ne perturbe pas un menu ouvert.
+    private func autoRefresh() {
+        if menuOpen { return }
+        refreshSessions()
+    }
 
     private func refreshSessions() {
         workQueue.async { [weak self] in
@@ -150,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu
 
     private func rebuildMenu() {
-        let menu = NSMenu()
+        menu.removeAllItems()
         let waiting = sessions.filter { $0.status == "waiting" }.count
 
         menu.addItem(disabled("\(sessions.count) session(s) · \(waiting) en attente"))
@@ -181,14 +191,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-        let refresh = NSMenuItem(title: "Rafraichir", action: #selector(manualRefresh), keyEquivalent: "r")
-        refresh.target = self
+        // Rafraichir : vue custom -> ne ferme pas le menu au clic.
+        let refresh = NSMenuItem(title: "Rafraichir", action: nil, keyEquivalent: "")
+        refresh.view = MenuActionView(title: "Rafraichir maintenant") { [weak self] in
+            self?.refreshSessions()
+            self?.refreshUsage()
+        }
         menu.addItem(refresh)
         let quit = NSMenuItem(title: "Quitter HyperClaude", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
-
-        statusItem.menu = menu
     }
 
     private func disabled(_ title: String) -> NSMenuItem {
@@ -250,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let filled = max(0, min(slots, Int((value / 100 * Double(slots)).rounded())))
         // Gris fonce (texte + piste) et bleu fonce, adaptatifs clair/sombre.
         let textColor = Self.dyn(NSColor(white: 0.22, alpha: 1), NSColor(white: 0.88, alpha: 1))
-        let trackColor = Self.dyn(NSColor(white: 0.42, alpha: 1), NSColor(white: 0.45, alpha: 1))
+        let trackColor = Self.dyn(NSColor(white: 0.80, alpha: 1), NSColor(white: 0.35, alpha: 1))
         let darkBlue = Self.dyn(NSColor(srgbRed: 0.11, green: 0.29, blue: 0.63, alpha: 1),
                                 NSColor(srgbRed: 0.42, green: 0.60, blue: 0.95, alpha: 1))
         let barColor: NSColor = (severity == "critical") ? .systemRed
@@ -288,11 +300,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? proc.run()
     }
 
-    @objc private func manualRefresh() {
-        refreshSessions()
-        refreshUsage()
-    }
-
     @objc private func quit() {
         NSApp.terminate(nil)
     }
@@ -309,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
             guard let info else { return }
             let me = Unmanaged<AppDelegate>.fromOpaque(info).takeUnretainedValue()
-            me.refreshSessions()
+            me.autoRefresh()
         }
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault, callback, &ctx,
@@ -321,5 +328,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         FSEventStreamSetDispatchQueue(stream, DispatchQueue.main)
         FSEventStreamStart(stream)
         eventStream = stream
+    }
+}
+
+// MARK: - Suivi de l'etat ouvert/ferme du menu
+
+extension AppDelegate: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        menuOpen = true
+        refreshSessions()   // donnees fraiches a l'ouverture (local, peu couteux)
+    }
+    func menuDidClose(_ menu: NSMenu) {
+        menuOpen = false
+    }
+}
+
+// MARK: - Item de menu cliquable qui ne ferme PAS le menu
+
+/// Vue custom pour un item de menu : declenche une action au clic sans dismisser le menu
+/// (contrairement a un NSMenuItem standard). Gere le surlignage au survol.
+final class MenuActionView: NSView {
+    private let title: String
+    private let onClick: () -> Void
+
+    init(title: String, width: CGFloat = 240, onClick: @escaping () -> Void) {
+        self.title = title
+        self.onClick = onClick
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 24))
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) non supporte") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let highlighted = enclosingMenuItem?.isHighlighted ?? false
+        if highlighted {
+            NSColor.selectedContentBackgroundColor.setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 1), xRadius: 5, yRadius: 5).fill()
+        }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .foregroundColor: highlighted ? NSColor.white : NSColor.labelColor,
+            .font: NSFont.menuFont(ofSize: 13),
+        ]
+        let text = title as NSString
+        let size = text.size(withAttributes: attrs)
+        text.draw(at: NSPoint(x: 14, y: (bounds.height - size.height) / 2), withAttributes: attrs)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self, userInfo: nil
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) { needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { needsDisplay = true }
+
+    override func mouseUp(with event: NSEvent) {
+        onClick()
+        // Volontairement : pas de cancelTracking -> le menu reste ouvert.
+        needsDisplay = true
     }
 }
