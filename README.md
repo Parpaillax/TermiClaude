@@ -107,12 +107,14 @@ App AppKit (`NSStatusItem`) qui **reutilise le coeur Python** (une seule source 
 elle invoque `python3 -m hyperclaude` (sessions) et `python3 -m hyperclaude.usage` (quota),
 et rend un menu natif.
 
-- **Icone** : symbole neutre ; compteur orange (`N`) des qu'une session attend.
-- **Menu** : une entree par session (puce coloree, details en info-bulle : dossier, tty,
-  attente) ; clic = focus best-effort (active Hyper ; le `tty` est deja porte pour le
-  plugin Hyper de L3).
-- **Footer** : `Session : x %` et `Semaine (all models) : y %` (via `usage.py`), ou
-  `Usage indisponible` a defaut - jamais de valeur inventee.
+- **Icone** : logo Hyper x Claude **monochrome template** (s'inverse selon le theme de la
+  barre) ; pastille rouge dessinee avec compteur des qu'une session attend.
+- **Menu** : une entree par session sur deux niveaux - **titre genere par l'IA** (celui de
+  `/resume`, lu dans le journal `ai-title`) en gras avec puce de statut coloree, puis
+  sous-ligne (statut, dossier, tty, attente). Clic = focus best-effort (active Hyper ; le
+  `tty` est deja porte pour le plugin Hyper de L3).
+- **Footer** : `Session` et `Semaine` avec mini-barre + pourcentage (via `usage.py`, couleur
+  selon la severite), ou `Usage indisponible` a defaut - jamais de valeur inventee.
 - **Reactivite** : FSEvents sur `~/.claude/sessions` (mise a jour quasi-instantanee) +
   poll de secours (5 s sessions, 45 s usage).
 - App **agent** (`LSUIElement`) : pas d'icone Dock, vit dans la barre de menus.

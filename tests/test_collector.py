@@ -103,6 +103,29 @@ class CollectTests(unittest.TestCase):
         self.assertTrue(entries[0].stale)
 
 
+class AiTitleTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_reads_last_ai_title(self):
+        log = self.tmp / "sess.jsonl"
+        lines = [
+            '{"type":"ai-title","aiTitle":"Ancien titre","sessionId":"s"}',
+            '{"type":"user","message":"..."}',
+            '{"type":"ai-title","aiTitle":"Titre courant","sessionId":"s"}',
+            '{"type":"assistant","message":"..."}',
+        ]
+        log.write_text("\n".join(lines), encoding="utf-8")
+        self.assertEqual(collector._read_ai_title(log), "Titre courant")
+
+    def test_no_title_returns_none(self):
+        log = self.tmp / "sess.jsonl"
+        log.write_text('{"type":"user"}\n{"type":"assistant"}', encoding="utf-8")
+        self.assertIsNone(collector._read_ai_title(log))
+
+
 class TtyResolutionTests(unittest.TestCase):
     def test_resolve_tty_direct(self):
         ps_map = {100: (90, "ttys010")}

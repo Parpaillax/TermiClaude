@@ -5,6 +5,7 @@ struct Session: Decodable {
     let pid: Int
     let sessionId: String?
     let name: String?
+    let title: String?
     let cwd: String?
     let status: String
     let waitingFor: String?

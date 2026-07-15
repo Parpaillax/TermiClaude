@@ -26,6 +26,13 @@ from typing import Dict, List, Optional, Tuple
 # Emplacement des fichiers d'etat natifs de Claude Code.
 SESSIONS_DIR = Path.home() / ".claude" / "sessions"
 
+# Journaux de conversation (un .jsonl par session) : porte le titre genere par l'IA.
+PROJECTS_DIR = Path.home() / ".claude" / "projects"
+
+# Taille max lue en fin de journal pour retrouver le dernier titre (les `ai-title`
+# sont emis regulierement, donc presents pres de la fin).
+_TITLE_TAIL_BYTES = 1_000_000
+
 # Au-dela de ce delai sans mise a jour, une session encore vivante est marquee "stale"
 # (information seulement - elle reste affichee, cf. note sur `alive` plus bas).
 STALE_AFTER_MS = 30 * 60 * 1000  # 30 min
@@ -40,7 +47,8 @@ class SessionEntry:
 
     pid: int
     session_id: Optional[str] = None
-    name: Optional[str] = None
+    name: Optional[str] = None       # nom derive (ex. repositories-91)
+    title: Optional[str] = None      # titre genere par l'IA (celui de /resume)
     cwd: Optional[str] = None
     status: str = "unknown"          # waiting | busy | idle | unknown
     waiting_for: Optional[str] = None
@@ -113,6 +121,42 @@ def _resolve_tty(pid: int, ps_map: Dict[int, Tuple[Optional[int], str]]) -> Opti
     return None
 
 
+def _find_session_log(session_id: str) -> Optional[Path]:
+    """Localise le journal `<sessionId>.jsonl` dans les dossiers de projets."""
+    if not session_id or not PROJECTS_DIR.is_dir():
+        return None
+    matches = list(PROJECTS_DIR.glob(f"*/{session_id}.jsonl"))
+    return matches[0] if matches else None
+
+
+def _read_ai_title(path: Path) -> Optional[str]:
+    """Retourne le dernier titre genere par l'IA (`type: ai-title`) du journal.
+
+    Lit seulement la fin du fichier (jusqu'a `_TITLE_TAIL_BYTES`) et scanne les lignes
+    de la fin vers le debut - pas de parsing integral d'un gros JSONL.
+    """
+    try:
+        size = path.stat().st_size
+        to_read = min(size, _TITLE_TAIL_BYTES)
+        with path.open("rb") as fh:
+            fh.seek(size - to_read)
+            data = fh.read(to_read)
+    except OSError:
+        return None
+    for line in reversed(data.splitlines()):
+        if b'"ai-title"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("type") == "ai-title":
+            title = entry.get("aiTitle")
+            if title:
+                return title
+    return None
+
+
 def _parse_session_file(path: Path) -> Optional[SessionEntry]:
     """Parse un ``sessions/<pid>.json`` en SessionEntry (tolerant aux champs manquants)."""
     try:
@@ -175,6 +219,11 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
         entry.focusable = entry.tty is not None
         if entry.updated_at:
             entry.stale = (now_ms - entry.updated_at) > STALE_AFTER_MS
+
+        if entry.session_id:
+            log = _find_session_log(entry.session_id)
+            if log:
+                entry.title = _read_ai_title(log)
 
         entries.append(entry)
 
