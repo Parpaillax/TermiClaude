@@ -21,6 +21,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         "unknown": "etat inconnu",
     ]
 
+    /// Couleur adaptative : `light` en theme clair, `dark` en theme sombre.
+    private static func dyn(_ light: NSColor, _ dark: NSColor) -> NSColor {
+        NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        }
+    }
+
     private static func color(for status: String) -> NSColor {
         switch status {
         case "waiting": return .systemOrange
@@ -241,24 +248,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let slots = 12
         let value = percent ?? 0
         let filled = max(0, min(slots, Int((value / 100 * Double(slots)).rounded())))
+        // Gris fonce (texte + piste) et bleu fonce, adaptatifs clair/sombre.
+        let textColor = Self.dyn(NSColor(white: 0.22, alpha: 1), NSColor(white: 0.88, alpha: 1))
+        let trackColor = Self.dyn(NSColor(white: 0.42, alpha: 1), NSColor(white: 0.45, alpha: 1))
+        let darkBlue = Self.dyn(NSColor(srgbRed: 0.11, green: 0.29, blue: 0.63, alpha: 1),
+                                NSColor(srgbRed: 0.42, green: 0.60, blue: 0.95, alpha: 1))
         let barColor: NSColor = (severity == "critical") ? .systemRed
-            : (severity == "warning") ? .systemOrange : .systemBlue
+            : (severity == "warning") ? .systemOrange : darkBlue
         let barFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
 
         let out = NSMutableAttributedString()
         out.append(NSAttributedString(string: label.padding(toLength: 8, withPad: " ", startingAt: 0), attributes: [
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: textColor,
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
         ]))
-        // Blocs pleins : partie remplie en couleur, piste en gris solide (aucune opacite faible).
+        // Blocs pleins : partie remplie en couleur, piste en gris fonce solide.
         out.append(NSAttributedString(string: String(repeating: "█", count: filled), attributes: [
             .foregroundColor: barColor, .font: barFont,
         ]))
         out.append(NSAttributedString(string: String(repeating: "█", count: slots - filled), attributes: [
-            .foregroundColor: NSColor.systemGray, .font: barFont,
+            .foregroundColor: trackColor, .font: barFont,
         ]))
         out.append(NSAttributedString(string: "  " + Self.pct(percent), attributes: [
-            .foregroundColor: NSColor.labelColor,
+            .foregroundColor: textColor,
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
         ]))
         item.attributedTitle = out
