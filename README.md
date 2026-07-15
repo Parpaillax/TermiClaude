@@ -11,8 +11,8 @@ une action, et basculer vers la bonne fenetre.
 
 | Palier | Contenu | Etat |
 |--------|---------|------|
-| L0 | Socle : collecte + normalisation de l'etat des sessions, mapping vers la fenetre | **en cours** |
-| L1 | POC SwiftBar (menu, statuts, highlight, focus best-effort) | a venir |
+| L0 | Socle : collecte + normalisation de l'etat des sessions, mapping vers la fenetre | **fait** |
+| L1 | POC SwiftBar (menu, statuts, highlight, focus best-effort) | **fait** |
 | L2 | App native SwiftUI (badge, FSEvents) + footer d'usage | a venir |
 | L3 | Plugin Hyper (focus fenetre fiable) | a venir |
 
@@ -46,6 +46,40 @@ En Python :
 ```python
 from hyperclaude import collect, to_json
 print(to_json(collect()))
+```
+
+## L1 - POC SwiftBar (`swiftbar/claude_sessions.3s.py`)
+
+Plugin [SwiftBar](https://swiftbar.app) qui consomme le socle L0 et rend le menu :
+
+- **Icone** : neutre (`✳️`) quand rien n'attend ; compteur d'alerte (`🟠 N`) des qu'au
+  moins une session est en attente.
+- **Menu** : une entree par session (triees attente -> en cours -> au repos), avec puce de
+  statut coloree, et en sous-menu le dossier, le terminal (`tty`), la nature de l'attente
+  et la version.
+- **Clic sur une session** : focus best-effort (active Hyper au premier plan). Le focus
+  *precis* de la bonne fenetre arrive au palier 3 (plugin Hyper) ; le point d'extension
+  recoit deja le `tty`.
+- **Pied** : compteur global, horodatage, "Rafraichir maintenant".
+
+Le suffixe `.3s` du nom de fichier fixe le rafraichissement a 3 s.
+
+### Installation
+
+SwiftBar doit etre installe, puis (etapes manuelles - le bit executable et le lien sont a
+poser soi-meme) :
+
+```bash
+chmod +x ~/Documents/Mysty/HyperClaude/swiftbar/claude_sessions.3s.py
+ln -s ~/Documents/Mysty/HyperClaude/swiftbar/claude_sessions.3s.py \
+      "<dossier de plugins SwiftBar>/claude_sessions.3s.py"
+```
+
+Le script se resout lui-meme vers ce depot (via `__file__`), donc le lien symbolique suffit :
+inutile de copier tout le paquet. Verifier le rendu hors SwiftBar :
+
+```bash
+python3 ~/Documents/Mysty/HyperClaude/swiftbar/claude_sessions.3s.py
 ```
 
 ## Tests
