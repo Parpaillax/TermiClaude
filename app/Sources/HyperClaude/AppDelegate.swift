@@ -24,9 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = Self.baseImage()
-            button.imagePosition = .imageLeft
+            button.imagePosition = .imageOnly
         }
+        updateButton()
         rebuildMenu()
         startWatching()
         refreshSessions()
@@ -67,28 +67,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Icone / badge
 
-    private static func baseImage() -> NSImage {
-        let cfg = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        let img = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "HyperClaude")?
-            .withSymbolConfiguration(cfg)
-        img?.isTemplate = true
-        return img ?? NSImage()
+    /// Logo Hyper x Claude embarque (rendu couleur, non template).
+    private static let logo: NSImage = {
+        if let url = Bundle.module.url(forResource: "menubar-icon", withExtension: "png"),
+           let img = NSImage(contentsOf: url) {
+            return img
+        }
+        return NSImage(systemSymbolName: "sparkles", accessibilityDescription: "HyperClaude") ?? NSImage()
+    }()
+
+    /// Compose le logo avec une pastille (badge) portant le nombre de sessions en attente.
+    private static func statusImage(waiting: Int) -> NSImage {
+        let h: CGFloat = 18
+        let size = NSSize(width: waiting > 0 ? h + 4 : h, height: h)
+        let img = NSImage(size: size)
+        img.lockFocus()
+        logo.draw(in: NSRect(x: 0, y: 0, width: h, height: h),
+                  from: .zero, operation: .sourceOver, fraction: 1.0)
+        if waiting > 0 {
+            let d: CGFloat = 11
+            let rect = NSRect(x: size.width - d, y: size.height - d, width: d, height: d)
+            NSColor.systemRed.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            let text = "\(min(waiting, 9))" as NSString
+            let attrs: [NSAttributedString.Key: Any] = [
+                .foregroundColor: NSColor.white,
+                .font: NSFont.systemFont(ofSize: 8, weight: .bold),
+            ]
+            let ts = text.size(withAttributes: attrs)
+            text.draw(at: NSPoint(x: rect.midX - ts.width / 2, y: rect.midY - ts.height / 2),
+                      withAttributes: attrs)
+        }
+        img.unlockFocus()
+        img.isTemplate = false
+        return img
     }
 
     private func updateButton() {
         guard let button = statusItem.button else { return }
         let waiting = sessions.filter { $0.status == "waiting" }.count
-        if waiting > 0 {
-            button.attributedTitle = NSAttributedString(
-                string: " \(waiting)",
-                attributes: [
-                    .foregroundColor: NSColor.systemOrange,
-                    .font: NSFont.systemFont(ofSize: 12, weight: .bold),
-                ]
-            )
-        } else {
-            button.attributedTitle = NSAttributedString(string: "")
-        }
+        button.image = Self.statusImage(waiting: waiting)
     }
 
     // MARK: - Menu

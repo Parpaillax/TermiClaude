@@ -5,7 +5,9 @@ if CommandLine.arguments.contains("--selftest") {
     let root = DataSource.repoRoot() ?? "(introuvable)"
     let sessions = DataSource.sessions()
     let usage = DataSource.usage()
+    let iconFound = Bundle.module.url(forResource: "menubar-icon", withExtension: "png") != nil
     FileHandle.standardOutput.write(Data("repoRoot: \(root)\n".utf8))
+    FileHandle.standardOutput.write(Data("icon resource found: \(iconFound)\n".utf8))
     FileHandle.standardOutput.write(Data("sessions: \(sessions.count)\n".utf8))
     for s in sessions {
         FileHandle.standardOutput.write(Data("  - \(s.name ?? "?") [\(s.status)] tty=\(s.tty ?? "-") focusable=\(s.focusable)\n".utf8))

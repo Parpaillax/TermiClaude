@@ -16,10 +16,20 @@ echo "==> assemblage $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp -f "$BIN" "$APP/Contents/MacOS/HyperClaude"
 cp -f "$HERE/Info.plist" "$APP/Contents/Info.plist"
+# Bundle de ressources SwiftPM (icone) : dans Resources (standard, trouve par Bundle.module).
+if [ -d "$HERE/.build/release/HyperClaude_HyperClaude.bundle" ]; then
+  cp -Rf "$HERE/.build/release/HyperClaude_HyperClaude.bundle" "$APP/Contents/Resources/"
+fi
 
 echo "==> signature ad hoc"
+# Garde-fou : un bundle de ressources mal place dans MacOS casse codesign ("bundle format
+# unrecognized"). On le deplace hors de l'app (pas de rm dans cet environnement).
+if [ -e "$APP/Contents/MacOS/HyperClaude_HyperClaude.bundle" ]; then
+  mkdir -p "$HERE/.build/stale"
+  mv "$APP/Contents/MacOS/HyperClaude_HyperClaude.bundle" "$HERE/.build/stale/" 2>/dev/null || true
+fi
 # Ad hoc : suffisant en dev. Une vraie identite Developer ID stabilise le "Toujours autoriser" du Keychain.
-codesign --force --sign - "$APP" 2>/dev/null || echo "   (codesign ignore)"
+codesign --force --deep --sign - "$APP" || echo "   (codesign a echoue - l'app peut etre bloquee)"
 
 echo "OK -> $APP"
 echo "Lancer : open \"$APP\""
