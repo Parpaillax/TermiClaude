@@ -16,6 +16,10 @@ echo "==> assemblage $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp -f "$BIN" "$APP/Contents/MacOS/HyperClaude"
 cp -f "$HERE/Info.plist" "$APP/Contents/Info.plist"
+# Icone de l'app (Finder / launcher / cmd-tab).
+if [ -f "$HERE/AppIcon.icns" ]; then
+  cp -f "$HERE/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+fi
 # Bundle de ressources SwiftPM (icone) : dans Resources (standard, trouve par Bundle.module).
 if [ -d "$HERE/.build/release/HyperClaude_HyperClaude.bundle" ]; then
   cp -Rf "$HERE/.build/release/HyperClaude_HyperClaude.bundle" "$APP/Contents/Resources/"

@@ -44,7 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             self?.refreshSessions()
         }
-        usageTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
+        // L'endpoint d'usage est fortement rate-limite : on l'interroge avec parcimonie.
+        usageTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             self?.refreshUsage()
         }
     }
@@ -68,7 +69,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let fetched = DataSource.usage()
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.usage = fetched
+                // Garde le dernier usage fiable : un echec transitoire (429...) ne blanke pas
+                // le footer. On ne remplace que par une valeur disponible, ou faute de cache.
+                if let fetched, fetched.available {
+                    self.usage = fetched
+                } else if self.usage == nil {
+                    self.usage = fetched
+                }
                 self.rebuildMenu()
             }
         }
