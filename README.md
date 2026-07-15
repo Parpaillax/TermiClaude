@@ -82,6 +82,25 @@ inutile de copier tout le paquet. Verifier le rendu hors SwiftBar :
 python3 ~/Documents/Mysty/HyperClaude/swiftbar/claude_sessions.3s.py
 ```
 
+## Usage / quota (footer, `hyperclaude/usage.py`) - source derisquee
+
+Lecteur des pourcentages d'usage, pret a alimenter le footer en L2 (pas encore branche a
+l'UI). Source confirmee et testee en live :
+
+- **Endpoint** : `GET https://api.anthropic.com/api/oauth/usage`
+  (headers `Authorization: Bearer <token>` + `anthropic-beta: oauth-2025-04-20`).
+- **Token** : Keychain macOS, service `Claude Code-credentials` -> `claudeAiOauth.accessToken`.
+- **Extraction** : tableau `limits` -> `kind="session"` (% session) et `kind="weekly_all"`
+  (% hebdo tous modeles, **hors Fable** : Fable a sa propre limite `weekly_scoped`). Repli
+  sur `five_hour` / `seven_day`.
+- **Robustesse** : stdlib seule (`urllib`), aucune ecriture, jamais de log du token ; toute
+  erreur (token absent/expire, reseau, format) -> `available=false` avec motif, jamais de
+  valeur inventee.
+
+```bash
+python3 -m hyperclaude.usage      # instantane JSON (peut demander une autorisation Keychain)
+```
+
 ## Tests
 
 ```bash
