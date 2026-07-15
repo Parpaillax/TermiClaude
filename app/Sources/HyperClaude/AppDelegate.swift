@@ -238,22 +238,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func usageItem(_ label: String, _ percent: Double?, _ severity: String?) -> NSMenuItem {
         let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         item.isEnabled = false
+        let slots = 12
         let value = percent ?? 0
-        let filled = max(0, min(10, Int((value / 100 * 10).rounded())))
-        let bar = String(repeating: "▮", count: filled) + String(repeating: "▯", count: 10 - filled)
+        let filled = max(0, min(slots, Int((value / 100 * Double(slots)).rounded())))
         let barColor: NSColor = (severity == "critical") ? .systemRed
             : (severity == "warning") ? .systemOrange : .systemBlue
+        let barFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
 
         let out = NSMutableAttributedString()
         out.append(NSAttributedString(string: label.padding(toLength: 8, withPad: " ", startingAt: 0), attributes: [
             .foregroundColor: NSColor.secondaryLabelColor,
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
         ]))
-        out.append(NSAttributedString(string: bar + "  ", attributes: [
-            .foregroundColor: barColor,
-            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+        // Blocs pleins : partie remplie en couleur, piste en gris solide (aucune opacite faible).
+        out.append(NSAttributedString(string: String(repeating: "█", count: filled), attributes: [
+            .foregroundColor: barColor, .font: barFont,
         ]))
-        out.append(NSAttributedString(string: Self.pct(percent), attributes: [
+        out.append(NSAttributedString(string: String(repeating: "█", count: slots - filled), attributes: [
+            .foregroundColor: NSColor.systemGray, .font: barFont,
+        ]))
+        out.append(NSAttributedString(string: "  " + Self.pct(percent), attributes: [
             .foregroundColor: NSColor.labelColor,
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
         ]))
