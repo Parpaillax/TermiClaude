@@ -149,6 +149,13 @@ Installation du plugin : voir `hyper-plugin/README.md` (lien symbolique dans
 `~/.hyper_plugins/local/` + `localPlugins` dans `~/.hyper.js` + rechargement de Hyper).
 Debug : `~/.hyperclaude/plugin.log`.
 
+## Regenerer les icones
+
+Les PNG/icns proviennent des SVG de `assets/`, rasterises par `tools/svg2png.swift`
+(WKWebView, fond transparent, plein cadre - `qlmanage` ajoutait un fond blanc). Voir
+l'entete du fichier pour la commande (compilation + usage), puis reconstruire l'iconset
+via `iconutil` et relancer `app/build.sh`.
+
 ## Tests
 
 ```bash
