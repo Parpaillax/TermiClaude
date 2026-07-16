@@ -159,11 +159,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu
 
+    /// Logo couleur pour le header du menu (inline).
+    private static let headerLogo: NSImage? = {
+        guard let url = Bundle.module.url(forResource: "menubar-icon", withExtension: "png") else { return nil }
+        return NSImage(contentsOf: url)
+    }()
+
     private func rebuildMenu() {
         menu.removeAllItems()
         let waiting = sessions.filter { $0.status == "waiting" }.count
 
-        menu.addItem(disabled("\(sessions.count) session(s) · \(waiting) en attente"))
+        let header = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        let head = NSMutableAttributedString()
+        if let logo = Self.headerLogo {
+            let att = NSTextAttachment()
+            att.image = logo
+            att.bounds = CGRect(x: 0, y: -3, width: 15, height: 15)
+            head.append(NSAttributedString(attachment: att))
+            head.append(NSAttributedString(string: "  "))
+        }
+        head.append(NSAttributedString(string: "\(sessions.count) session(s) · \(waiting) en attente", attributes: [
+            .font: NSFont.menuFont(ofSize: 13),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]))
+        header.attributedTitle = head
+        menu.addItem(header)
         menu.addItem(.separator())
 
         if sessions.isEmpty {
@@ -404,7 +425,7 @@ final class MenuActionView: NSView {
         if highlighted {
             NSColor.selectedContentBackgroundColor.setFill()
             // Meme inset/rayon que le surlignage natif des items de menu (macOS moderne).
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 0), xRadius: 5, yRadius: 5).fill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 0), xRadius: 7, yRadius: 7).fill()
         }
         let attrs: [NSAttributedString.Key: Any] = [
             .foregroundColor: highlighted ? NSColor.selectedMenuItemTextColor : NSColor.labelColor,
@@ -412,8 +433,8 @@ final class MenuActionView: NSView {
         ]
         let text = title as NSString
         let size = text.size(withAttributes: attrs)
-        // Alignement horizontal sur le texte des items natifs (~ 21 px de marge gauche).
-        text.draw(at: NSPoint(x: 21, y: (bounds.height - size.height) / 2), withAttributes: attrs)
+        // Alignement horizontal sur le texte des items natifs.
+        text.draw(at: NSPoint(x: 18, y: (bounds.height - size.height) / 2), withAttributes: attrs)
     }
 
     override func updateTrackingAreas() {
