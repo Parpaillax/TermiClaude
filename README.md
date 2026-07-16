@@ -1,4 +1,8 @@
-# HyperClaude
+<p align="center">
+  <img src="assets/logo.png" alt="Logo HyperClaude" width="160" height="160">
+</p>
+
+<h1 align="center">HyperClaude</h1>
 
 Widget de barre de menus macOS pour **superviser en un coup d'oeil ses sessions Claude Code**
 reparties dans plusieurs fenetres [Hyper](https://hyper.is), signaler celles qui attendent
@@ -148,6 +152,30 @@ Au clic sur une session, le widget met **la bonne fenetre Hyper** au premier pla
 Installation du plugin : voir `hyper-plugin/README.md` (lien symbolique dans
 `~/.hyper_plugins/local/` + `localPlugins` dans `~/.hyper.js` + rechargement de Hyper).
 Debug : `~/.hyperclaude/plugin.log`.
+
+## Lancement au demarrage du Mac (`launchd/`)
+
+Pour que le widget demarre tout seul a l'ouverture de session macOS (et se relance s'il se
+ferme), on l'enregistre comme **LaunchAgent** `launchd`. Construire l'app d'abord, puis :
+
+```bash
+bash app/build.sh                 # si pas encore fait : produit app/HyperClaude.app
+bash launchd/install.sh           # enregistre + lance le widget immediatement
+```
+
+`install.sh` est idempotent : il resout les chemins absolus, ecrit le plist final dans
+`~/Library/LaunchAgents/com.julienchateau.hyperclaude.plist` et (re)charge l'agent via
+`launchctl`. Les logs vont dans `~/Library/Logs/HyperClaude.log`.
+
+Pour retirer le demarrage automatique :
+
+```bash
+bash launchd/uninstall.sh
+```
+
+> Le LaunchAgent pointe vers le binaire **dans ce depot**
+> (`app/HyperClaude.app/Contents/MacOS/HyperClaude`). Si tu deplaces le depot, relance
+> `install.sh` pour reecrire le chemin.
 
 ## Regenerer les icones
 
