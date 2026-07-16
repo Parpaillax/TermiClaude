@@ -194,9 +194,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-        // Rafraichir : vue custom -> ne ferme pas le menu au clic.
+        // Largeur de contenu du menu (mesuree sur les items deja ajoutes) pour que la vue
+        // custom "Rafraichir" s'etende comme les autres lignes.
+        let menuFont = NSFont.menuFont(ofSize: 13)
+        var contentWidth: CGFloat = 180
+        for it in menu.items {
+            if let a = it.attributedTitle {
+                contentWidth = max(contentWidth, a.size().width)
+            } else if !it.title.isEmpty {
+                contentWidth = max(contentWidth, (it.title as NSString).size(withAttributes: [.font: menuFont]).width)
+            }
+        }
+        let rowWidth = contentWidth + 44
+
+        // Rafraichir : vue custom -> ne ferme pas le menu au clic, mais style aligne sur le natif.
         let refresh = NSMenuItem(title: "Rafraichir", action: nil, keyEquivalent: "")
-        refresh.view = MenuActionView(title: "Rafraichir maintenant") { [weak self] in
+        refresh.view = MenuActionView(title: "Rafraichir maintenant", width: rowWidth) { [weak self] in
             self?.refreshSessions()
             self?.refreshUsage()
         }
@@ -369,10 +382,10 @@ final class MenuActionView: NSView {
     private let title: String
     private let onClick: () -> Void
 
-    init(title: String, width: CGFloat = 240, onClick: @escaping () -> Void) {
+    init(title: String, width: CGFloat, onClick: @escaping () -> Void) {
         self.title = title
         self.onClick = onClick
-        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 24))
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) non supporte") }
@@ -381,15 +394,17 @@ final class MenuActionView: NSView {
         let highlighted = enclosingMenuItem?.isHighlighted ?? false
         if highlighted {
             NSColor.selectedContentBackgroundColor.setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 1), xRadius: 5, yRadius: 5).fill()
+            // Meme inset/rayon que le surlignage natif des items de menu (macOS moderne).
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 0), xRadius: 5, yRadius: 5).fill()
         }
         let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: highlighted ? NSColor.white : NSColor.labelColor,
+            .foregroundColor: highlighted ? NSColor.selectedMenuItemTextColor : NSColor.labelColor,
             .font: NSFont.menuFont(ofSize: 13),
         ]
         let text = title as NSString
         let size = text.size(withAttributes: attrs)
-        text.draw(at: NSPoint(x: 14, y: (bounds.height - size.height) / 2), withAttributes: attrs)
+        // Alignement horizontal sur le texte des items natifs (~ 21 px de marge gauche).
+        text.draw(at: NSPoint(x: 21, y: (bounds.height - size.height) / 2), withAttributes: attrs)
     }
 
     override func updateTrackingAreas() {
