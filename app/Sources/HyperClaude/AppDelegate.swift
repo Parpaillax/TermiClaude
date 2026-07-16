@@ -176,7 +176,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     keyEquivalent: ""
                 )
                 item.target = self
-                item.representedObject = session.tty
+                var info: [String: Any] = [:]
+                if let sp = session.shellPid { info["shellPid"] = sp }
+                if let t = session.tty { info["tty"] = t }
+                item.representedObject = info
                 item.attributedTitle = Self.attributedRow(session)
                 menu.addItem(item)
             }
@@ -291,13 +294,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Actions
 
-    /// Focus best-effort (L2) : active Hyper au premier plan. Le focus *precis* de la
-    /// bonne fenetre viendra du plugin Hyper (L3), qui recevra le `tty` (representedObject).
+    /// Focus (L3) : ecrit un ordre de focus (shellPid + tty) lu par le plugin Hyper qui
+    /// met la bonne fenetre au premier plan, puis active Hyper (repli si plugin absent).
     @objc private func focusSession(_ sender: NSMenuItem) {
+        if let info = sender.representedObject as? [String: Any] {
+            Self.writeFocusRequest(shellPid: info["shellPid"] as? Int, tty: info["tty"] as? String)
+        }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         proc.arguments = ["-e", "tell application \"Hyper\" to activate"]
         try? proc.run()
+    }
+
+    /// Canal IPC vers le plugin Hyper : ecrit ~/.hyperclaude/focus.json (ecriture atomique).
+    private static func writeFocusRequest(shellPid: Int?, tty: String?) {
+        let dir = (NSHomeDirectory() as NSString).appendingPathComponent(".hyperclaude")
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        var obj: [String: Any] = ["ts": Int(Date().timeIntervalSince1970 * 1000)]
+        if let shellPid { obj["shellPid"] = shellPid }
+        if let tty { obj["tty"] = tty }
+        guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
+        let dst = URL(fileURLWithPath: (dir as NSString).appendingPathComponent("focus.json"))
+        try? data.write(to: dst, options: .atomic)
     }
 
     @objc private func quit() {

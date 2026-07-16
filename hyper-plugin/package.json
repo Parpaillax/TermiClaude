@@ -1,0 +1,7 @@
+{
+  "name": "hyperclaude",
+  "version": "0.1.0",
+  "main": "index.js",
+  "description": "Focus de la bonne fenetre Hyper depuis le widget HyperClaude (recoit un ordre de focus par pid de shell / tty).",
+  "license": "MIT"
+}

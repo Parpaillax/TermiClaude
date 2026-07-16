@@ -10,6 +10,7 @@ struct Session: Decodable {
     let status: String
     let waitingFor: String?
     let tty: String?
+    let shellPid: Int?
     let focusable: Bool
     let stale: Bool
 }

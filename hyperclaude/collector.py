@@ -55,6 +55,7 @@ class SessionEntry:
     updated_at: Optional[int] = None  # epoch ms
     version: Optional[str] = None
     tty: Optional[str] = None         # ex. "ttys016" ; None si non resolu
+    shell_pid: Optional[int] = None   # pid du shell parent (= pty.pid cote Hyper)
     alive: bool = False               # process reellement vivant
     focusable: bool = False           # tty resolu -> fenetre Hyper ciblable
     stale: bool = False               # pas de MaJ depuis STALE_AFTER_MS
@@ -216,6 +217,8 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
             continue
 
         entry.tty = _resolve_tty(entry.pid, ps_map)
+        # pid du shell parent (zsh lance par node-pty) : pivot de correlation avec Hyper.
+        entry.shell_pid = ps_map.get(entry.pid, (None, ""))[0]
         entry.focusable = entry.tty is not None
         if entry.updated_at:
             entry.stale = (now_ms - entry.updated_at) > STALE_AFTER_MS

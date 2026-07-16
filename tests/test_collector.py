@@ -75,8 +75,9 @@ class CollectTests(unittest.TestCase):
         self.assertEqual([e.pid for e in entries], [2, 3, 1])
         # Tri : waiting -> busy -> idle.
         self.assertEqual([e.status for e in entries], ["waiting", "busy", "idle"])
-        # Mapping tty + focusable.
+        # Mapping tty + shell_pid (ppid) + focusable.
         self.assertEqual(entries[0].tty, "ttys002")
+        self.assertEqual(entries[0].shell_pid, 20)
         self.assertTrue(all(e.focusable for e in entries))
         self.assertEqual(entries[0].waiting_for, "permission prompt")
 

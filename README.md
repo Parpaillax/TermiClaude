@@ -14,7 +14,7 @@ une action, et basculer vers la bonne fenetre.
 | L0 | Socle : collecte + normalisation de l'etat des sessions, mapping vers la fenetre | **fait** |
 | L1 | POC SwiftBar (menu, statuts, highlight, focus best-effort) | **fait** |
 | L2 | App native AppKit (badge, FSEvents) + footer d'usage | **fait (v1)** |
-| L3 | Plugin Hyper (focus fenetre fiable) | a venir |
+| L3 | Plugin Hyper (focus fenetre fiable) | **fait (a tester en reel)** |
 
 ## L0 - Socle de collecte (`hyperclaude/collector.py`)
 
@@ -130,6 +130,24 @@ open app/HyperClaude.app                # lance le widget
 Au premier acces au quota, macOS peut demander l'autorisation Keychain (« Toujours
 autoriser »). Une vraie identite de signature (Developer ID) stabilise ce choix ; la
 signature ad hoc du script suffit en dev.
+
+## L3 - Focus fenetre fiable (plugin Hyper, `hyper-plugin/`)
+
+Au clic sur une session, le widget met **la bonne fenetre Hyper** au premier plan (fini le
+« je tombe sur le mauvais terminal »).
+
+- Le widget ecrit un ordre de focus dans `~/.hyperclaude/focus.json`
+  (`{shellPid, tty, ts}`, ecriture atomique).
+- Le **plugin Hyper** (process principal) surveille ce fichier et met au premier plan la
+  fenetre dont une session node-pty a `pty.pid === shellPid` (repli : meme `tty`).
+- **Correlation par pid de shell** : le zsh lance par node-pty (`pty.pid`) est le parent du
+  process `claude` ; le collecteur expose ce pid (`shell_pid`). Verifie : les `shell_pid`
+  sont bien les zsh enfants de Hyper.
+- Repli si le plugin n'est pas installe : le widget active simplement Hyper.
+
+Installation du plugin : voir `hyper-plugin/README.md` (lien symbolique dans
+`~/.hyper_plugins/local/` + `localPlugins` dans `~/.hyper.js` + rechargement de Hyper).
+Debug : `~/.hyperclaude/plugin.log`.
 
 ## Tests
 
