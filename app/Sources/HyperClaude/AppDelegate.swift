@@ -217,6 +217,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quit = NSMenuItem(title: "Quitter HyperClaude", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
+
+        // Cale la vue custom sur la largeur reelle du menu (incluant "Quitter" + ⌘Q),
+        // pour que le surlignage s'etende exactement comme les lignes natives.
+        let fullWidth = menu.size.width
+        if fullWidth > 1 {
+            refresh.view?.setFrameSize(NSSize(width: fullWidth, height: 22))
+        }
     }
 
     private func disabled(_ title: String) -> NSMenuItem {
@@ -386,6 +393,8 @@ final class MenuActionView: NSView {
         self.title = title
         self.onClick = onClick
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
+        // S'etire a la largeur reelle de l'item de menu (comme les lignes natives).
+        autoresizingMask = [.width]
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) non supporte") }
