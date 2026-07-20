@@ -1,11 +1,11 @@
 """Collecte et normalisation de l'etat des sessions Claude Code (lot L0).
 
-Coeur transverse du widget HyperClaude, reutilise par tous les paliers :
+Coeur transverse du widget TermiClaude, reutilise par tous les paliers :
 
   1. Enumere les fichiers d'etat natifs ecrits par Claude Code :
      ``~/.claude/sessions/<pid>.json``.
   2. Filtre les sessions mortes (process disparu).
-  3. Resout le mapping ``pid -> tty`` (fenetre Hyper) via ``ps``.
+  3. Resout le mapping ``pid -> tty`` (fenetre du Terminal) via ``ps``.
   4. Trie pour l'affichage : en attente, puis en cours, puis au repos.
 
 Aucune ecriture nulle part : le module ne fait que lire des fichiers et interroger ``ps``.
@@ -55,9 +55,8 @@ class SessionEntry:
     updated_at: Optional[int] = None  # epoch ms
     version: Optional[str] = None
     tty: Optional[str] = None         # ex. "ttys016" ; None si non resolu
-    shell_pid: Optional[int] = None   # pid du shell parent (= pty.pid cote Hyper)
     alive: bool = False               # process reellement vivant
-    focusable: bool = False           # tty resolu -> fenetre Hyper ciblable
+    focusable: bool = False           # tty resolu -> fenetre Terminal ciblable
     stale: bool = False               # pas de MaJ depuis STALE_AFTER_MS
 
     def to_dict(self) -> dict:
@@ -103,7 +102,7 @@ def _build_ps_map() -> Dict[int, Tuple[Optional[int], str]]:
 
 
 def _resolve_tty(pid: int, ps_map: Dict[int, Tuple[Optional[int], str]]) -> Optional[str]:
-    """tty de la session : celui du process ``claude`` lui-meme, avec repli sur le parent.
+    """tty de la session Terminal.app : celui du process ``claude`` lui-meme, avec repli sur le parent.
 
     Retourne un tty du type ``ttysNNN``, ou None si aucun terminal n'est resolu
     (session detachee, tmux, SSH... -> non ciblable).
@@ -217,8 +216,6 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
             continue
 
         entry.tty = _resolve_tty(entry.pid, ps_map)
-        # pid du shell parent (zsh lance par node-pty) : pivot de correlation avec Hyper.
-        entry.shell_pid = ps_map.get(entry.pid, (None, ""))[0]
         entry.focusable = entry.tty is not None
         if entry.updated_at:
             entry.stale = (now_ms - entry.updated_at) > STALE_AFTER_MS
@@ -243,7 +240,7 @@ def _main(argv: Optional[List[str]] = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Collecte l'etat des sessions Claude Code (socle L0 HyperClaude).",
+        description="Collecte l'etat des sessions Claude Code (socle L0 TermiClaude).",
     )
     parser.add_argument(
         "--include-dead",

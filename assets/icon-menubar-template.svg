@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <title>HyperClaude - icone barre de menus (template monochrome)</title>
-  <!-- Cadre terminal Hyper : contour arrondi (monochrome, template). -->
+  <title>TermiClaude - icone barre de menus (template monochrome)</title>
+  <!-- Cadre terminal : contour arrondi (monochrome, template). -->
   <rect x="20" y="20" width="160" height="160" rx="42" fill="none" stroke="#000" stroke-width="15"/>
   <!-- Marque Claude officielle, centree (viewBox 24x24, echelle 3.3, centree en 100,100). -->
   <g transform="translate(55.6,55.6) scale(3.7)" fill="#000" fill-rule="nonzero">

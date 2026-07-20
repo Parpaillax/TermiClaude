@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "HyperClaude",
+    name: "TermiClaude",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "HyperClaude",
-            path: "Sources/HyperClaude",
+            name: "TermiClaude",
+            path: "Sources/TermiClaude",
             resources: [.process("Resources")]
         )
     ]

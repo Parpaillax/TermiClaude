@@ -16,7 +16,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hyperclaude import collector  # noqa: E402
+from termiclaude import collector  # noqa: E402
 
 
 def _write_session(dir_path, pid, **fields):
@@ -75,9 +75,8 @@ class CollectTests(unittest.TestCase):
         self.assertEqual([e.pid for e in entries], [2, 3, 1])
         # Tri : waiting -> busy -> idle.
         self.assertEqual([e.status for e in entries], ["waiting", "busy", "idle"])
-        # Mapping tty + shell_pid (ppid) + focusable.
+        # Mapping tty + focusable.
         self.assertEqual(entries[0].tty, "ttys002")
-        self.assertEqual(entries[0].shell_pid, 20)
         self.assertTrue(all(e.focusable for e in entries))
         self.assertEqual(entries[0].waiting_for, "permission prompt")
 

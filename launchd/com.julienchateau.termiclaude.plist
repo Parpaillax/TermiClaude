@@ -2,14 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Modele de LaunchAgent : le chemin __HYPERCLAUDE_BIN__ est resolu par install.sh
+    <!-- Modele de LaunchAgent : le chemin __TERMICLAUDE_BIN__ est resolu par install.sh
          qui ecrit la version finale dans ~/Library/LaunchAgents/. -->
     <key>Label</key>
-    <string>com.julienchateau.hyperclaude</string>
+    <string>com.julienchateau.termiclaude</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>__HYPERCLAUDE_BIN__</string>
+        <string>__TERMICLAUDE_BIN__</string>
     </array>
 
     <!-- Lance au login et relance si le process meurt. -->
@@ -22,8 +22,8 @@
     <string>Interactive</string>
 
     <key>StandardOutPath</key>
-    <string>__HYPERCLAUDE_LOG__</string>
+    <string>__TERMICLAUDE_LOG__</string>
     <key>StandardErrorPath</key>
-    <string>__HYPERCLAUDE_LOG__</string>
+    <string>__TERMICLAUDE_LOG__</string>
 </dict>
 </plist>

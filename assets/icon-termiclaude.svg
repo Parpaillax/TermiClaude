@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Icone HyperClaude : terminal Hyper avec la marque Claude au centre">
-  <title>HyperClaude - icone Hyper x Claude</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Icone TermiClaude : terminal macOS avec la marque Claude au centre">
+  <title>TermiClaude - icone Terminal x Claude</title>
   <defs>
-    <linearGradient id="hyperBorder" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="termBorder" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#FF2E9A"/>
       <stop offset="0.5" stop-color="#FF5C7A"/>
       <stop offset="1" stop-color="#FF9A2E"/>
     </linearGradient>
   </defs>
-  <!-- Terminal Hyper : carre arrondi, bordure degradee, interieur noir (eclair + tiret retires) -->
-  <rect x="8" y="8" width="184" height="184" rx="46" fill="url(#hyperBorder)"/>
+  <!-- Terminal : carre arrondi, bordure degradee, interieur noir (eclair + tiret retires) -->
+  <rect x="8" y="8" width="184" height="184" rx="46" fill="url(#termBorder)"/>
   <rect x="24" y="24" width="152" height="152" rx="34" fill="#0B0B0D"/>
   <!-- Marque Claude officielle, centree dans le terminal (viewBox 24x24, echelle x4, centree en 100,100) -->
   <g transform="translate(52,52) scale(4)" fill="#D97757" fill-rule="nonzero">

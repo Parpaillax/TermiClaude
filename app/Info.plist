@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>HyperClaude</string>
+    <string>TermiClaude</string>
     <key>CFBundleDisplayName</key>
-    <string>HyperClaude</string>
+    <string>TermiClaude</string>
     <key>CFBundleIdentifier</key>
-    <string>com.julienchateau.hyperclaude</string>
+    <string>com.julienchateau.termiclaude</string>
     <key>CFBundleExecutable</key>
-    <string>HyperClaude</string>
+    <string>TermiClaude</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
@@ -23,6 +23,6 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>HyperClaude</string>
+    <string>TermiClaude</string>
 </dict>
 </plist>

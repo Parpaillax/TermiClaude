@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-# <xbar.title>HyperClaude - sessions Claude Code</xbar.title>
+# <xbar.title>TermiClaude - sessions Claude Code</xbar.title>
 # <xbar.version>0.1.0</xbar.version>
 # <xbar.author>Julien Chateau</xbar.author>
-# <xbar.desc>Supervise les sessions Claude Code (Hyper) : statut, attente, focus.</xbar.desc>
+# <xbar.desc>Supervise les sessions Claude Code (Terminal.app) : statut, attente, focus.</xbar.desc>
 # <swiftbar.hideAbout>true</swiftbar.hideAbout>
 # <swiftbar.hideRunInTerminal>true</swiftbar.hideRunInTerminal>
 # <swiftbar.hideLastUpdated>true</swiftbar.hideLastUpdated>
 # <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
-"""Plugin SwiftBar (POC L1) du widget HyperClaude.
+"""Plugin SwiftBar (POC L1) du widget TermiClaude.
 
 Deux modes :
   - sans argument      : rend le menu SwiftBar (icone + liste des sessions).
-  - ``--focus <tty>``  : action best-effort de mise au premier plan de Hyper.
+  - ``--focus <tty>``  : selectionne l'onglet Terminal.app correspondant et le met au
+    premier plan (AppleScript natif, repli sur une simple activation de Terminal).
 
 Le script se resout lui-meme vers la racine du depot (via ``__file__`` resolu), de sorte
 qu'il fonctionne meme installe en lien symbolique dans le dossier de plugins SwiftBar.
@@ -24,12 +25,13 @@ Le suffixe ``.3s`` fixe le rafraichissement a 3 s.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
-# Rendre le paquet hyperclaude importable, que le fichier soit lance direct ou en symlink.
+# Rendre le paquet termiclaude importable, que le fichier soit lance direct ou en symlink.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -53,17 +55,30 @@ def _shorten(path: str | None) -> str:
 
 
 def do_focus(tty: str | None) -> int:
-    """Action best-effort (P1) : activer Hyper au premier plan.
-
-    Le focus *precis* de la bonne fenetre viendra avec le plugin Hyper (palier 3) ;
-    ce point d'extension recevra alors le tty pour cibler la fenetre exacte.
+    """Selectionne l'onglet Terminal.app dont le tty correspond et l'avance au premier
+    plan (AppleScript natif : `tty of tab` expose directement le tty de chaque onglet,
+    pas besoin de plugin compagnon). Repli sur une simple activation si le tty est absent
+    ou introuvable.
     """
+    script = 'tell application "Terminal" to activate'
+    if tty and re.fullmatch(r"ttys[0-9]+", tty):
+        dev_tty = f"/dev/{tty}"
+        script = f'''
+        tell application "Terminal"
+            activate
+            repeat with w in windows
+                repeat with t in tabs of w
+                    if tty of t is "{dev_tty}" then
+                        set selected of t to true
+                        set index of w to 1
+                        return
+                    end if
+                end repeat
+            end repeat
+        end tell
+        '''
     try:
-        subprocess.run(
-            ["osascript", "-e", 'tell application "Hyper" to activate'],
-            check=False,
-            capture_output=True,
-        )
+        subprocess.run(["osascript", "-e", script], check=False, capture_output=True)
     except OSError:
         pass
     return 0
@@ -96,10 +111,10 @@ def _emit_session(entry) -> None:
 
 def render() -> int:
     try:
-        from hyperclaude import collect
+        from termiclaude import collect
         sessions = collect()
     except Exception as exc:  # noqa: BLE001 - un plugin ne doit jamais planter l'affichage
-        print("⚠️ HyperClaude")
+        print("⚠️ TermiClaude")
         print("---")
         print(f"Erreur de collecte : {exc} | color=#d64545")
         return 0

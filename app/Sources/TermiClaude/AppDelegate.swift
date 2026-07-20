@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var eventStream: FSEventStreamRef?
     private var pollTimer: Timer?
     private var usageTimer: Timer?
-    private let workQueue = DispatchQueue(label: "com.julienchateau.hyperclaude.work", qos: .utility)
+    private let workQueue = DispatchQueue(label: "com.julienchateau.termiclaude.work", qos: .utility)
 
     // Libelle par statut.
     private static let labels: [String: String] = [
@@ -100,13 +100,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Icone / badge
 
-    /// Glyphe monochrome Hyper x Claude (image template : s'inverse selon le theme de la barre).
+    /// Glyphe monochrome Terminal x Claude (image template : s'inverse selon le theme de la barre).
     private static let glyph: NSImage = {
         if let url = Bundle.module.url(forResource: "menubar-template", withExtension: "png"),
            let img = NSImage(contentsOf: url) {
             return img
         }
-        return NSImage(systemSymbolName: "sparkles", accessibilityDescription: "HyperClaude") ?? NSImage()
+        return NSImage(systemSymbolName: "sparkles", accessibilityDescription: "TermiClaude") ?? NSImage()
     }()
 
     /// Icone de barre de menus. Sans attente : glyphe template (adaptatif natif).
@@ -197,10 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     keyEquivalent: ""
                 )
                 item.target = self
-                var info: [String: Any] = [:]
-                if let sp = session.shellPid { info["shellPid"] = sp }
-                if let t = session.tty { info["tty"] = t }
-                item.representedObject = info
+                item.representedObject = session.tty
                 item.attributedTitle = Self.attributedRow(session)
                 menu.addItem(item)
             }
@@ -235,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshUsage()
         }
         menu.addItem(refresh)
-        let quit = NSMenuItem(title: "Quitter HyperClaude", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quitter TermiClaude", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 
@@ -335,28 +332,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Actions
 
-    /// Focus (L3) : ecrit un ordre de focus (shellPid + tty) lu par le plugin Hyper qui
-    /// met la bonne fenetre au premier plan, puis active Hyper (repli si plugin absent).
+    /// Focus (L3) : Terminal.app expose nativement le `tty` de chaque onglet en AppleScript
+    /// (`tty of tab`), donc pas besoin de plugin compagnon. On selectionne
+    /// directement l'onglet correspondant et on met sa fenetre au premier plan ; repli sur
+    /// une simple activation de Terminal si le tty n'est pas resolu ou introuvable.
     @objc private func focusSession(_ sender: NSMenuItem) {
-        if let info = sender.representedObject as? [String: Any] {
-            Self.writeFocusRequest(shellPid: info["shellPid"] as? Int, tty: info["tty"] as? String)
+        if let tty = sender.representedObject as? String {
+            Self.focusTerminalTab(tty: tty)
+        } else {
+            Self.activateTerminal()
         }
+    }
+
+    /// Selectionne l'onglet Terminal.app dont le tty correspond et avance sa fenetre au
+    /// premier plan. `tty` doit etre au format produit par le collecteur (ex. "ttys016") ;
+    /// on le valide avant de l'interpoler dans l'AppleScript.
+    private static func focusTerminalTab(tty: String) {
+        guard tty.range(of: "^ttys[0-9]+$", options: .regularExpression) != nil else {
+            activateTerminal()
+            return
+        }
+        let devTty = "/dev/\(tty)"
+        let script = """
+        tell application "Terminal"
+            activate
+            repeat with w in windows
+                repeat with t in tabs of w
+                    if tty of t is "\(devTty)" then
+                        set selected of t to true
+                        set index of w to 1
+                        return
+                    end if
+                end repeat
+            end repeat
+        end tell
+        """
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        proc.arguments = ["-e", "tell application \"Hyper\" to activate"]
+        proc.arguments = ["-e", script]
         try? proc.run()
     }
 
-    /// Canal IPC vers le plugin Hyper : ecrit ~/.hyperclaude/focus.json (ecriture atomique).
-    private static func writeFocusRequest(shellPid: Int?, tty: String?) {
-        let dir = (NSHomeDirectory() as NSString).appendingPathComponent(".hyperclaude")
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        var obj: [String: Any] = ["ts": Int(Date().timeIntervalSince1970 * 1000)]
-        if let shellPid { obj["shellPid"] = shellPid }
-        if let tty { obj["tty"] = tty }
-        guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
-        let dst = URL(fileURLWithPath: (dir as NSString).appendingPathComponent("focus.json"))
-        try? data.write(to: dst, options: .atomic)
+    private static func activateTerminal() {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        proc.arguments = ["-e", "tell application \"Terminal\" to activate"]
+        try? proc.run()
     }
 
     @objc private func quit() {

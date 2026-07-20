@@ -15,7 +15,7 @@ venv/
 
 # Swift / build de l'app
 app/.build/
-app/HyperClaude.app/
+app/TermiClaude.app/
 *.xcodeproj
 *.xcworkspace
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Etat normalise d'une session Claude Code (fourni par le socle Python `hyperclaude`).
+/// Etat normalise d'une session Claude Code (fourni par le socle Python `termiclaude`).
 struct Session: Decodable {
     let pid: Int
     let sessionId: String?
@@ -10,12 +10,11 @@ struct Session: Decodable {
     let status: String
     let waitingFor: String?
     let tty: String?
-    let shellPid: Int?
     let focusable: Bool
     let stale: Bool
 }
 
-/// Instantane d'usage de quota (fourni par `hyperclaude.usage`).
+/// Instantane d'usage de quota (fourni par `termiclaude.usage`).
 struct Usage: Decodable {
     let available: Bool
     let sessionPercent: Double?

@@ -1,4 +1,4 @@
-"""Point d'entree du paquet : ``python3 -m hyperclaude``.
+"""Point d'entree du paquet : ``python3 -m termiclaude``.
 
 Affiche en JSON l'etat courant des sessions Claude Code (socle L0).
 """

@@ -13,7 +13,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hyperclaude import usage  # noqa: E402
+from termiclaude import usage  # noqa: E402
 
 # Reponse reelle observee (2026-07-15), reduite aux champs pertinents + tableau limits.
 SAMPLE = {
