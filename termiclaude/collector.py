@@ -50,6 +50,7 @@ class SessionEntry:
     name: Optional[str] = None       # nom derive (ex. repositories-91)
     title: Optional[str] = None      # titre genere par l'IA (celui de /resume)
     cwd: Optional[str] = None
+    kind: Optional[str] = None       # interactive | bg (cf. note sur `terminal_gone` dans collect())
     status: str = "unknown"          # waiting | busy | idle | unknown
     waiting_for: Optional[str] = None
     updated_at: Optional[int] = None  # epoch ms
@@ -180,6 +181,7 @@ def _parse_session_file(path: Path) -> Optional[SessionEntry]:
         session_id=raw.get("sessionId"),
         name=raw.get("name"),
         cwd=raw.get("cwd"),
+        kind=raw.get("kind"),
         status=status,
         waiting_for=raw.get("waitingFor"),
         updated_at=raw.get("updatedAt"),
@@ -196,6 +198,13 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
     (``kill -0``), pas sur la fraicheur du fichier - une session ``idle`` ouverte depuis
     des heures reste une vraie session. La peremption (``stale``) est une information
     complementaire, jamais un motif d'exclusion.
+
+    Note sur la fermeture de fenetre : fermer l'onglet Terminal.app d'une session
+    ``kind="interactive"`` ne tue pas toujours le process (il peut survivre orpheline,
+    reparente a launchd) - mais son tty ne se resout alors plus (cf. ``_resolve_tty``).
+    Une session interactive sans tty a perdu sa fenetre : cote widget, elle est morte,
+    au meme titre qu'un process disparu. Les sessions ``kind="bg"`` (agents de fond, jamais
+    attaches a un terminal) ne sont pas concernees et restent affichees sans tty.
     """
     if now_ms is None:
         now_ms = int(time.time() * 1000)
@@ -212,11 +221,13 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
             continue
 
         entry.alive = _pid_alive(entry.pid)
-        if not entry.alive and not include_dead:
-            continue
-
         entry.tty = _resolve_tty(entry.pid, ps_map)
         entry.focusable = entry.tty is not None
+
+        terminal_gone = entry.kind == "interactive" and not entry.focusable
+        if (not entry.alive or terminal_gone) and not include_dead:
+            continue
+
         if entry.updated_at:
             entry.stale = (now_ms - entry.updated_at) > STALE_AFTER_MS
 

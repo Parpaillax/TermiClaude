@@ -92,6 +92,41 @@ class CollectTests(unittest.TestCase):
         self.assertFalse(included[0].alive)
         self.assertFalse(included[0].focusable)  # aucun tty resolu
 
+    def test_interactive_without_tty_is_treated_as_dead(self):
+        # Fenetre Terminal.app fermee : le process peut survivre orpheline, mais son tty
+        # ne se resout plus -> une session interactive doit disparaitre comme un process mort.
+        _write_session(self.tmp, 7, name="orphan", status="idle", kind="interactive")
+        with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
+             mock.patch.object(collector, "_pid_alive", lambda pid: True), \
+             mock.patch.object(collector, "_build_ps_map", lambda: {}):
+            self.assertEqual(collector.collect(), [])
+            included = collector.collect(include_dead=True)
+
+        self.assertEqual([e.pid for e in included], [7])
+        self.assertTrue(included[0].alive)
+        self.assertFalse(included[0].focusable)
+
+    def test_bg_without_tty_stays_visible(self):
+        # Un agent de fond n'est jamais attache a un terminal : l'absence de tty est normale.
+        _write_session(self.tmp, 8, name="bg-agent", status="idle", kind="bg")
+        with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
+             mock.patch.object(collector, "_pid_alive", lambda pid: True), \
+             mock.patch.object(collector, "_build_ps_map", lambda: {}):
+            entries = collector.collect()
+
+        self.assertEqual([e.pid for e in entries], [8])
+        self.assertFalse(entries[0].focusable)
+
+    def test_interactive_with_tty_stays_visible(self):
+        _write_session(self.tmp, 9, name="live", status="idle", kind="interactive")
+        with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
+             mock.patch.object(collector, "_pid_alive", lambda pid: True), \
+             mock.patch.object(collector, "_build_ps_map", lambda: {9: (90, "ttys009")}):
+            entries = collector.collect()
+
+        self.assertEqual([e.pid for e in entries], [9])
+        self.assertTrue(entries[0].focusable)
+
     def test_stale_flag(self):
         # updated_at tres ancien vs now_ms -> stale, mais toujours retourne.
         _write_session(self.tmp, 6, name="old", status="idle", updatedAt=1)
