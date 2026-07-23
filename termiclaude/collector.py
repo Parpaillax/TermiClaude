@@ -4,9 +4,11 @@ Coeur transverse du widget TermiClaude, reutilise par tous les paliers :
 
   1. Enumere les fichiers d'etat natifs ecrits par Claude Code :
      ``~/.claude/sessions/<pid>.json``.
-  2. Filtre les sessions mortes (process disparu).
-  3. Resout le mapping ``pid -> tty`` (fenetre du Terminal) via ``ps``.
-  4. Trie pour l'affichage : en attente, puis en cours, puis au repos.
+  2. Ne garde que les sessions interactives (``kind="interactive"``) : le widget supervise
+     des onglets Terminal.app, pas les agents de fond (``kind="bg"``, lances via l'outil Task).
+  3. Filtre les sessions mortes (process disparu, ou fenetre Terminal.app fermee).
+  4. Resout le mapping ``pid -> tty`` (fenetre du Terminal) via ``ps``.
+  5. Trie pour l'affichage : en attente, puis en cours, puis au repos.
 
 Aucune ecriture nulle part : le module ne fait que lire des fichiers et interroger ``ps``.
 Le format de ``sessions/<pid>.json`` n'est pas contractuel (teste sur Claude Code 2.1.210) ;
@@ -122,6 +124,50 @@ def _resolve_tty(pid: int, ps_map: Dict[int, Tuple[Optional[int], str]]) -> Opti
     return None
 
 
+def _terminal_app_ttys() -> Optional[frozenset]:
+    """Ensemble des tty (``ttysNNN``) correspondant a un onglet Terminal.app reellement ouvert.
+
+    ``ps -o tty=`` rapporte le tty controleur enregistre au niveau noyau pour un process -
+    une info qui peut rester "ttys004" un moment apres que la fenetre Terminal.app qui la
+    portait a deja disparu (le detachement complet n'est pas instantane). Cette fonction
+    interroge Terminal.app lui-meme (source de verite sur les fenetres reellement ouvertes)
+    pour fiabiliser la detection au-dela de ce que ``ps`` rapporte.
+
+    Retourne ``None`` si Terminal.app n'est pas lance ou si l'appel echoue (osascript absent,
+    Automation refusee...) - dans ce cas l'appelant doit se rabattre sur la resolution ``ps``
+    seule plutot que de considerer toutes les sessions comme fantomes.
+    """
+    try:
+        running = subprocess.run(
+            ["osascript", "-e", 'application "Terminal" is running'],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2,
+        )
+        if running.returncode != 0 or running.stdout.strip() != "true":
+            return None if running.returncode != 0 else frozenset()
+
+        out = subprocess.run(
+            ["osascript", "-e", 'tell application "Terminal" to get tty of every tab of every window'],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2,
+        )
+        if out.returncode != 0:
+            return None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    ttys = set()
+    for chunk in out.stdout.split(","):
+        name = chunk.strip().rsplit("/", 1)[-1]
+        if name.startswith("ttys"):
+            ttys.add(name)
+    return frozenset(ttys)
+
+
 def _find_session_log(session_id: str) -> Optional[Path]:
     """Localise le journal `<sessionId>.jsonl` dans les dossiers de projets."""
     if not session_id or not PROJECTS_DIR.is_dir():
@@ -201,10 +247,15 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
 
     Note sur la fermeture de fenetre : fermer l'onglet Terminal.app d'une session
     ``kind="interactive"`` ne tue pas toujours le process (il peut survivre orpheline,
-    reparente a launchd) - mais son tty ne se resout alors plus (cf. ``_resolve_tty``).
-    Une session interactive sans tty a perdu sa fenetre : cote widget, elle est morte,
-    au meme titre qu'un process disparu. Les sessions ``kind="bg"`` (agents de fond, jamais
-    attaches a un terminal) ne sont pas concernees et restent affichees sans tty.
+    reparente a launchd) - et le tty qu'expose ``ps`` pour ce process peut rester
+    "resolu" un court instant apres la fermeture reelle de la fenetre (cf. ``_resolve_tty``).
+    On verifie donc en plus, aupres de Terminal.app lui-meme (``_terminal_app_ttys``), que ce
+    tty correspond a un onglet reellement ouvert. Une session interactive sans onglet Terminal
+    reel a perdu sa fenetre : cote widget, elle est morte, au meme titre qu'un process disparu.
+
+    Note sur ``kind="bg"`` : ce sont des agents de fond (outil Task), jamais rattaches a un
+    terminal. Le widget ne supervise que des sessions interactives Terminal.app - ces entrees
+    sont donc toujours exclues, meme avec ``include_dead=True``.
     """
     if now_ms is None:
         now_ms = int(time.time() * 1000)
@@ -213,6 +264,7 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
         return []
 
     ps_map = _build_ps_map()
+    terminal_ttys = _terminal_app_ttys()
     entries: List[SessionEntry] = []
 
     for path in SESSIONS_DIR.glob("*.json"):
@@ -220,11 +272,19 @@ def collect(include_dead: bool = False, now_ms: Optional[int] = None) -> List[Se
         if entry is None:
             continue
 
+        if entry.kind != "interactive":
+            continue
+
         entry.alive = _pid_alive(entry.pid)
         entry.tty = _resolve_tty(entry.pid, ps_map)
-        entry.focusable = entry.tty is not None
 
-        terminal_gone = entry.kind == "interactive" and not entry.focusable
+        # tty resolu par `ps` mais Terminal.app ne le liste plus -> fenetre deja fermee.
+        tty_is_live = entry.tty is not None and (
+            terminal_ttys is None or entry.tty in terminal_ttys
+        )
+        entry.focusable = tty_is_live
+
+        terminal_gone = not tty_is_live
         if (not entry.alive or terminal_gone) and not include_dead:
             continue
 

@@ -58,12 +58,18 @@ class CollectTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
+        # Par defaut : Terminal.app indetermine (None) -> on se rabat sur `ps` seul, comme
+        # avant l'ajout du cross-check. Les tests qui veulent verifier ce cross-check
+        # surchargent explicitement ce mock.
+        patcher = mock.patch.object(collector, "_terminal_app_ttys", lambda: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_collect_sorts_and_filters(self):
-        _write_session(self.tmp, 1, name="idle-one", status="idle")
-        _write_session(self.tmp, 2, name="waiting-one", status="waiting", waitingFor="permission prompt")
-        _write_session(self.tmp, 3, name="busy-one", status="busy")
-        _write_session(self.tmp, 4, name="dead-one", status="idle")
+        _write_session(self.tmp, 1, name="idle-one", status="idle", kind="interactive")
+        _write_session(self.tmp, 2, name="waiting-one", status="waiting", waitingFor="permission prompt", kind="interactive")
+        _write_session(self.tmp, 3, name="busy-one", status="busy", kind="interactive")
+        _write_session(self.tmp, 4, name="dead-one", status="idle", kind="interactive")
 
         ps_map = {1: (10, "ttys001"), 2: (20, "ttys002"), 3: (30, "ttys003"), 4: (40, "ttys004")}
         with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
@@ -81,7 +87,7 @@ class CollectTests(unittest.TestCase):
         self.assertEqual(entries[0].waiting_for, "permission prompt")
 
     def test_include_dead(self):
-        _write_session(self.tmp, 5, name="dead", status="idle")
+        _write_session(self.tmp, 5, name="dead", status="idle", kind="interactive")
         with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
              mock.patch.object(collector, "_pid_alive", lambda pid: False), \
              mock.patch.object(collector, "_build_ps_map", lambda: {}):
@@ -106,16 +112,41 @@ class CollectTests(unittest.TestCase):
         self.assertTrue(included[0].alive)
         self.assertFalse(included[0].focusable)
 
-    def test_bg_without_tty_stays_visible(self):
-        # Un agent de fond n'est jamais attache a un terminal : l'absence de tty est normale.
+    def test_interactive_with_ps_tty_but_no_live_terminal_tab_is_treated_as_dead(self):
+        # `ps` rapporte encore "ttys004" pour le process (info residuelle post-fermeture),
+        # mais Terminal.app ne liste plus aucun onglet sur ce tty -> fenetre bel et bien
+        # fermee, la session doit disparaitre comme un process mort (et non plus rester
+        # "focusable" a tort).
+        _write_session(self.tmp, 10, name="ghost", status="idle", kind="interactive")
+        with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
+             mock.patch.object(collector, "_pid_alive", lambda pid: True), \
+             mock.patch.object(collector, "_build_ps_map", lambda: {10: (100, "ttys004")}), \
+             mock.patch.object(collector, "_terminal_app_ttys", lambda: frozenset({"ttys001"})):
+            self.assertEqual(collector.collect(), [])
+            included = collector.collect(include_dead=True)
+
+        self.assertEqual([e.pid for e in included], [10])
+        self.assertTrue(included[0].alive)
+        self.assertFalse(included[0].focusable)
+
+    def test_bg_sessions_are_always_excluded(self):
+        # Le widget ne supervise que des sessions interactives Terminal.app : un agent de
+        # fond (outil Task) est exclu meme avec include_dead=True.
         _write_session(self.tmp, 8, name="bg-agent", status="idle", kind="bg")
         with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
              mock.patch.object(collector, "_pid_alive", lambda pid: True), \
              mock.patch.object(collector, "_build_ps_map", lambda: {}):
-            entries = collector.collect()
+            self.assertEqual(collector.collect(), [])
+            self.assertEqual(collector.collect(include_dead=True), [])
 
-        self.assertEqual([e.pid for e in entries], [8])
-        self.assertFalse(entries[0].focusable)
+    def test_missing_kind_is_excluded(self):
+        # Anciens fichiers de session sans champ "kind" (avant Claude Code 2.1.21x) : on ne
+        # peut pas garantir qu'il s'agit d'une session interactive, donc on exclut par defaut.
+        _write_session(self.tmp, 11, name="unknown-kind", status="idle")
+        with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
+             mock.patch.object(collector, "_pid_alive", lambda pid: True), \
+             mock.patch.object(collector, "_build_ps_map", lambda: {11: (110, "ttys011")}):
+            self.assertEqual(collector.collect(), [])
 
     def test_interactive_with_tty_stays_visible(self):
         _write_session(self.tmp, 9, name="live", status="idle", kind="interactive")
@@ -129,7 +160,7 @@ class CollectTests(unittest.TestCase):
 
     def test_stale_flag(self):
         # updated_at tres ancien vs now_ms -> stale, mais toujours retourne.
-        _write_session(self.tmp, 6, name="old", status="idle", updatedAt=1)
+        _write_session(self.tmp, 6, name="old", status="idle", updatedAt=1, kind="interactive")
         with mock.patch.object(collector, "SESSIONS_DIR", self.tmp), \
              mock.patch.object(collector, "_pid_alive", lambda pid: True), \
              mock.patch.object(collector, "_build_ps_map", lambda: {6: (60, "ttys006")}):
