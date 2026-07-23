@@ -187,6 +187,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(header)
         menu.addItem(.separator())
 
+        let newSessionItem = NSMenuItem(title: "Nouvelle session…", action: #selector(startNewSession), keyEquivalent: "n")
+        newSessionItem.target = self
+        menu.addItem(newSessionItem)
+        menu.addItem(.separator())
+
         if sessions.isEmpty {
             menu.addItem(disabled("Aucune session Claude Code active"))
         } else {
@@ -377,6 +382,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         proc.arguments = ["-e", "tell application \"Terminal\" to activate"]
+        try? proc.run()
+    }
+
+    /// "Nouvelle session" : panneau natif de choix de dossier, puis ouverture d'une fenetre
+    /// Terminal.app avec `claude` lance dans ce dossier (repo de code selectionne).
+    @objc private func startNewSession() {
+        let panel = NSOpenPanel()
+        panel.title = "Nouvelle session Claude"
+        panel.message = "Choisir le dossier du projet (repo de code)"
+        panel.prompt = "Ouvrir"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = false
+        panel.allowsMultipleSelection = false
+
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            Self.launchClaudeSession(at: url.path)
+        }
+    }
+
+    /// Ouvre une nouvelle fenetre Terminal.app positionnee sur `path` et y lance `claude`.
+    /// Le chemin est echappe pour le shell (quotes simples) puis pour l'AppleScript
+    /// (guillemets/antislash) avant d'etre interpole dans le script.
+    private static func launchClaudeSession(at path: String) {
+        let shellQuoted = "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        let command = "cd \(shellQuoted) && claude"
+        let appleScriptEscaped = command
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let script = """
+        tell application "Terminal"
+            activate
+            do script "\(appleScriptEscaped)"
+        end tell
+        """
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        proc.arguments = ["-e", script]
         try? proc.run()
     }
 
