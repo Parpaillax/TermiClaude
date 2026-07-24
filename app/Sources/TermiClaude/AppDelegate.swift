@@ -385,9 +385,127 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? proc.run()
     }
 
-    /// "Nouvelle session" : panneau natif de choix de dossier, puis ouverture d'une fenetre
+    /// Options exposees dans le formulaire "Nouvelle session" (flags CLI `claude --help`).
+    private enum ClaudeModel: String, CaseIterable {
+        case defaultValue = "", sonnet, opus, fable, haiku
+        var label: String {
+            switch self {
+            case .defaultValue: return "Par defaut"
+            case .sonnet: return "Sonnet"
+            case .opus: return "Opus"
+            case .fable: return "Fable"
+            case .haiku: return "Haiku"
+            }
+        }
+    }
+
+    private enum ClaudeEffort: String, CaseIterable {
+        case defaultValue = "", low, medium, high, xhigh, max
+        var label: String {
+            switch self {
+            case .defaultValue: return "Par defaut"
+            case .low: return "Low"
+            case .medium: return "Medium"
+            case .high: return "High"
+            case .xhigh: return "Xhigh"
+            case .max: return "Max"
+            }
+        }
+    }
+
+    private enum ClaudePermissionMode: String, CaseIterable {
+        case defaultValue = "", manual, plan, auto, acceptEdits, dontAsk, bypassPermissions
+        var label: String {
+            switch self {
+            case .defaultValue: return "Par defaut"
+            case .manual: return "Manuel"
+            case .plan: return "Plan"
+            case .auto: return "Auto"
+            case .acceptEdits: return "Accepter les edits"
+            case .dontAsk: return "Ne jamais demander"
+            case .bypassPermissions: return "Ignorer les permissions"
+            }
+        }
+    }
+
+    private static func makePopup(titles: [String]) -> NSPopUpButton {
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.addItems(withTitles: titles)
+        popup.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        return popup
+    }
+
+    private static func makeFormRow(_ label: String, _ control: NSView) -> NSStackView {
+        let text = NSTextField(labelWithString: label)
+        text.font = NSFont.systemFont(ofSize: 12)
+        text.widthAnchor.constraint(equalToConstant: 60).isActive = true
+        let row = NSStackView(views: [text, control])
+        row.orientation = .horizontal
+        row.spacing = 8
+        return row
+    }
+
+    /// Construit le formulaire d'options (modele/effort/mode/Ultracode), affiche dans une
+    /// NSAlert plutot que comme accessoryView de NSOpenPanel : depuis macOS 10.15, le panneau
+    /// de choix de fichier tourne dans un processus systeme separe qui ignore silencieusement
+    /// les accessory views personnalisees, alors qu'une NSAlert reste hebergee dans notre
+    /// propre process et s'affiche de facon fiable.
+    private static func makeSessionOptionsView(
+        modelPopup: NSPopUpButton,
+        effortPopup: NSPopUpButton,
+        modePopup: NSPopUpButton,
+        ultracodeCheckbox: NSButton
+    ) -> NSView {
+        let stack = NSStackView(views: [
+            makeFormRow("Modele", modelPopup),
+            makeFormRow("Effort", effortPopup),
+            makeFormRow("Mode", modePopup),
+            ultracodeCheckbox,
+        ])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 170))
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+        ])
+        return container
+    }
+
+    /// "Nouvelle session" : NSAlert de configuration (modele, effort, mode de permission,
+    /// Ultracode), puis panneau natif de choix de dossier, puis ouverture d'une fenetre
     /// Terminal.app avec `claude` lance dans ce dossier (repo de code selectionne).
     @objc private func startNewSession() {
+        let modelPopup = Self.makePopup(titles: ClaudeModel.allCases.map(\.label))
+        let effortPopup = Self.makePopup(titles: ClaudeEffort.allCases.map(\.label))
+        let modePopup = Self.makePopup(titles: ClaudePermissionMode.allCases.map(\.label))
+        if let autoIndex = ClaudePermissionMode.allCases.firstIndex(of: .auto) {
+            modePopup.selectItem(at: autoIndex)
+        }
+        let ultracodeCheckbox = NSButton(
+            checkboxWithTitle: "Activer Ultracode (orchestration multi-agents)",
+            target: nil, action: nil
+        )
+
+        let alert = NSAlert()
+        alert.messageText = "Nouvelle session Claude"
+        alert.informativeText = "Configurer la session, puis choisir le dossier du projet."
+        alert.addButton(withTitle: "Choisir le dossier…")
+        alert.addButton(withTitle: "Annuler")
+        alert.accessoryView = Self.makeSessionOptionsView(
+            modelPopup: modelPopup, effortPopup: effortPopup,
+            modePopup: modePopup, ultracodeCheckbox: ultracodeCheckbox
+        )
+
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
         let panel = NSOpenPanel()
         panel.title = "Nouvelle session Claude"
         panel.message = "Choisir le dossier du projet (repo de code)"
@@ -397,18 +515,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.canCreateDirectories = false
         panel.allowsMultipleSelection = false
 
-        NSApp.activate(ignoringOtherApps: true)
-        if panel.runModal() == .OK, let url = panel.url {
-            Self.launchClaudeSession(at: url.path)
-        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        Self.launchClaudeSession(
+            at: url.path,
+            model: ClaudeModel.allCases[modelPopup.indexOfSelectedItem],
+            effort: ClaudeEffort.allCases[effortPopup.indexOfSelectedItem],
+            permissionMode: ClaudePermissionMode.allCases[modePopup.indexOfSelectedItem],
+            ultracode: ultracodeCheckbox.state == .on
+        )
     }
 
-    /// Ouvre une nouvelle fenetre Terminal.app positionnee sur `path` et y lance `claude`.
-    /// Le chemin est echappe pour le shell (quotes simples) puis pour l'AppleScript
-    /// (guillemets/antislash) avant d'etre interpole dans le script.
-    private static func launchClaudeSession(at path: String) {
+    /// Ouvre une nouvelle fenetre Terminal.app positionnee sur `path` et y lance `claude`
+    /// avec les flags correspondant aux options choisies. Le chemin est echappe pour le
+    /// shell (quotes simples) puis pour l'AppleScript (guillemets/antislash) avant d'etre
+    /// interpole dans le script.
+    private static func launchClaudeSession(
+        at path: String,
+        model: ClaudeModel,
+        effort: ClaudeEffort,
+        permissionMode: ClaudePermissionMode,
+        ultracode: Bool
+    ) {
         let shellQuoted = "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
-        let command = "cd \(shellQuoted) && claude"
+
+        var args = ["claude"]
+        if !model.rawValue.isEmpty { args += ["--model", model.rawValue] }
+        if !effort.rawValue.isEmpty { args += ["--effort", effort.rawValue] }
+        if !permissionMode.rawValue.isEmpty { args += ["--permission-mode", permissionMode.rawValue] }
+        if ultracode { args += ["ultracode"] }
+
+        let command = "cd \(shellQuoted) && \(args.joined(separator: " "))"
         let appleScriptEscaped = command
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
