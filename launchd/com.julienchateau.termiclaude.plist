@@ -12,11 +12,16 @@
         <string>__TERMICLAUDE_BIN__</string>
     </array>
 
-    <!-- Lance au login et relance si le process meurt. -->
+    <!-- Lance au login. KeepAlive/SuccessfulExit=false : relance uniquement si le process
+         s'est termine anormalement (crash). Un "Quitter TermiClaude" depuis le menu sort
+         proprement (code 0) et n'est donc pas relance ; l'app repartira au prochain login. -->
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
 
     <key>ProcessType</key>
     <string>Interactive</string>

@@ -164,8 +164,8 @@ inter-applications, a accepter une fois.
 
 ## Lancement au demarrage du Mac (`launchd/`)
 
-Pour que le widget demarre tout seul a l'ouverture de session macOS (et se relance s'il se
-ferme), on l'enregistre comme **LaunchAgent** `launchd`. Construire l'app d'abord, puis :
+Pour que le widget demarre tout seul a l'ouverture de session macOS (et se relance en cas
+de crash), on l'enregistre comme **LaunchAgent** `launchd`. Construire l'app d'abord, puis :
 
 ```bash
 bash app/build.sh                 # si pas encore fait : produit app/TermiClaude.app
@@ -175,6 +175,11 @@ bash launchd/install.sh           # enregistre + lance le widget immediatement
 `install.sh` est idempotent : il resout les chemins absolus, ecrit le plist final dans
 `~/Library/LaunchAgents/com.julienchateau.termiclaude.plist` et (re)charge l'agent via
 `launchctl`. Les logs vont dans `~/Library/Logs/TermiClaude.log`.
+
+Le `KeepAlive` est conditionne a `SuccessfulExit = false` : l'agent ne relance le widget que
+s'il s'est termine anormalement. **Quitter TermiClaude** depuis le menu sort proprement et
+reste donc effectif - le widget repartira a la prochaine ouverture de session (ou tout de
+suite avec `launchctl kickstart gui/$(id -u)/com.julienchateau.termiclaude`).
 
 Pour retirer le demarrage automatique :
 
