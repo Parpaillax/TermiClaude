@@ -21,5 +21,7 @@ struct Usage: Decodable {
     let weeklyPercent: Double?
     let sessionSeverity: String?
     let weeklySeverity: String?
+    let sessionResetsAt: String?
+    let weeklyResetsAt: String?
     let error: String?
 }

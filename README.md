@@ -124,7 +124,9 @@ et rend un menu natif.
   sous-ligne (statut, dossier, tty, attente). Clic = focus precis de l'onglet Terminal.app
   correspondant (le `tty` est deja porte pour L3, cf. ci-dessous).
 - **Footer** : `Session` et `Semaine` avec mini-barre + pourcentage (via `usage.py`, couleur
-  selon la severite), ou `Usage indisponible` a defaut - jamais de valeur inventee.
+  selon la severite), et sous-ligne d'echeance de reset en heure locale (`reset 17h10` si
+  c'est aujourd'hui, `reset 31/08 13h00` sinon), ou `Usage indisponible` a defaut - jamais
+  de valeur inventee.
 - **Reactivite** : FSEvents sur `~/.claude/sessions` (mise a jour quasi-instantanee) +
   poll de secours (5 s sessions, 45 s usage).
 - App **agent** (`LSUIElement`) : pas d'icone Dock, vit dans la barre de menus.

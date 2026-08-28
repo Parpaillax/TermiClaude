@@ -210,8 +210,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
         if let usage, usage.available {
-            menu.addItem(usageItem("Session", usage.sessionPercent, usage.sessionSeverity))
-            menu.addItem(usageItem("Semaine", usage.weeklyPercent, usage.weeklySeverity))
+            menu.addItem(usageItem("Session", usage.sessionPercent, usage.sessionSeverity, usage.sessionResetsAt))
+            menu.addItem(usageItem("Semaine", usage.weeklyPercent, usage.weeklySeverity, usage.weeklyResetsAt))
         } else {
             menu.addItem(disabled("Usage indisponible"))
         }
@@ -260,6 +260,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return "\(Int(value.rounded())) %"
     }
 
+    /// Parseurs ISO8601 de l'API d'usage (avec et sans fraction de seconde).
+    private static let isoParsers: [ISO8601DateFormatter] = {
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return [plain, fractional]
+    }()
+
+    /// Echeance de reset en heure locale : "reset 17h30" si c'est aujourd'hui,
+    /// "reset 28/08 09h15" sinon. `nil` si la date est absente ou illisible.
+    private static func resetLabel(_ iso: String?) -> String? {
+        guard let iso,
+              let date = isoParsers.lazy.compactMap({ $0.date(from: iso) }).first
+        else { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "fr_FR")
+        fmt.dateFormat = Calendar.current.isDateInToday(date) ? "HH'h'mm" : "dd/MM HH'h'mm"
+        return "reset " + fmt.string(from: date)
+    }
+
     private static func shorten(_ path: String?) -> String {
         guard let path else { return "-" }
         return path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
@@ -299,8 +320,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return out
     }
 
-    /// Ligne d'usage : libelle + mini barre + pourcentage.
-    private func usageItem(_ label: String, _ percent: Double?, _ severity: String?) -> NSMenuItem {
+    /// Ligne d'usage : libelle + mini barre + pourcentage, et sous-ligne d'echeance de reset.
+    private func usageItem(_ label: String, _ percent: Double?, _ severity: String?, _ resetsAt: String?) -> NSMenuItem {
         let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         item.isEnabled = false
         let slots = 12
@@ -331,6 +352,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .foregroundColor: textColor,
             .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
         ]))
+        // Sous-ligne dim, alignee sous la barre : quand le quota repart a zero.
+        if let reset = Self.resetLabel(resetsAt) {
+            let para = NSMutableParagraphStyle()
+            para.lineSpacing = 2
+            let indent = String(repeating: " ", count: 8)
+            out.append(NSAttributedString(string: "\n" + indent + reset, attributes: [
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
+            ]))
+            out.addAttribute(.paragraphStyle, value: para, range: NSRange(location: 0, length: out.length))
+        }
         item.attributedTitle = out
         return item
     }
