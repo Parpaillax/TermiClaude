@@ -10,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuOpen = false
     private var sessions: [Session] = []
     private var usage: Usage?
+    // Vues custom du menu (lignes de session + "Rafraichir") : recalees sur la largeur
+    // reelle du menu a la fin de chaque reconstruction.
+    private var customRows: [NSView] = []
     private var eventStream: FSEventStreamRef?
     private var pollTimer: Timer?
     private var usageTimer: Timer?
@@ -167,6 +170,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu() {
         menu.removeAllItems()
+        customRows = []
+        var rowTitles: [NSAttributedString] = []
         let waiting = sessions.filter { $0.status == "waiting" }.count
 
         let header = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -196,15 +201,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(disabled("Aucune session Claude Code active"))
         } else {
             for session in sessions {
-                let item = NSMenuItem(
-                    title: "",
-                    action: session.focusable ? #selector(focusSession(_:)) : nil,
-                    keyEquivalent: ""
+                let row = SessionRowView(
+                    width: 240,   // provisoire : recalee plus bas sur la largeur du menu
+                    title: { Self.attributedRow(session, highlighted: $0) },
+                    onSelect: Self.focusAction(for: session),
+                    onClose: { [weak self] in
+                        // Un tour de boucle : laisse le menu se refermer avant la modale.
+                        DispatchQueue.main.async { self?.confirmAndCloseSession(session) }
+                    }
                 )
-                item.target = self
-                item.representedObject = session.tty
-                item.attributedTitle = Self.attributedRow(session)
+                let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+                item.view = row
                 menu.addItem(item)
+                customRows.append(row)
+                rowTitles.append(Self.attributedRow(session, highlighted: false))
             }
         }
 
@@ -228,7 +238,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 contentWidth = max(contentWidth, (it.title as NSString).size(withAttributes: [.font: menuFont]).width)
             }
         }
+        // Les lignes de session portent une vue custom : leur titre echappe a la boucle
+        // ci-dessus, on l'ajoute explicitement (avec la place prise par la croix).
+        for title in rowTitles {
+            contentWidth = max(contentWidth, title.size().width + 28)
+        }
         let rowWidth = contentWidth + 44
+        for row in customRows {
+            row.setFrameSize(NSSize(width: rowWidth, height: row.frame.height))
+        }
 
         // Rafraichir : vue custom -> ne ferme pas le menu au clic, mais style aligne sur le natif.
         let refresh = NSMenuItem(title: "Rafraichir", action: nil, keyEquivalent: "")
@@ -237,15 +255,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshUsage()
         }
         menu.addItem(refresh)
+        if let view = refresh.view { customRows.append(view) }
         let quit = NSMenuItem(title: "Quitter TermiClaude", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 
-        // Cale la vue custom sur la largeur reelle du menu (incluant "Quitter" + ⌘Q),
+        // Cale les vues custom sur la largeur reelle du menu (incluant "Quitter" + ⌘Q),
         // pour que le surlignage s'etende exactement comme les lignes natives.
         let fullWidth = menu.size.width
         if fullWidth > 1 {
-            refresh.view?.setFrameSize(NSSize(width: fullWidth, height: 22))
+            for row in customRows {
+                row.setFrameSize(NSSize(width: fullWidth, height: row.frame.height))
+            }
         }
     }
 
@@ -291,19 +312,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Ligne de session sur deux niveaux : puce coloree + titre en gras, puis sous-ligne dim.
-    private static func attributedRow(_ s: Session) -> NSAttributedString {
+    ///
+    /// `highlighted` : la ligne est survolee (fond bleu). AppKit ne recolore pas un titre
+    /// attribue, c'est donc a nous d'inverser les couleurs de texte - et d'eclaircir la puce,
+    /// sans quoi la puce bleue d'une session `busy` disparaitrait dans le fond.
+    private static func attributedRow(_ s: Session, highlighted: Bool) -> NSAttributedString {
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 2
         para.lineBreakMode = .byTruncatingTail
 
+        let statusColor = color(for: s.status)
+        let bulletColor = highlighted
+            ? (statusColor.blended(withFraction: 0.45, of: .white) ?? statusColor)
+            : statusColor
+        let titleColor: NSColor = highlighted ? .selectedMenuItemTextColor : .labelColor
+        let subColor: NSColor = highlighted
+            ? NSColor.selectedMenuItemTextColor.withAlphaComponent(0.8)
+            : .secondaryLabelColor
+
         let out = NSMutableAttributedString()
         out.append(NSAttributedString(string: "● ", attributes: [
-            .foregroundColor: color(for: s.status),
+            .foregroundColor: bulletColor,
             .font: NSFont.systemFont(ofSize: 12),
         ]))
         let title = truncate(s.title ?? s.name ?? "pid \(s.pid)", 52)
         out.append(NSAttributedString(string: title, attributes: [
-            .foregroundColor: NSColor.labelColor,
+            .foregroundColor: titleColor,
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
         ]))
 
@@ -312,7 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let waitingFor = s.waitingFor { sub += " · \(waitingFor)" }
         if s.stale { sub += " · inactive" }
         out.append(NSAttributedString(string: "\n" + sub, attributes: [
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: subColor,
             .font: NSFont.systemFont(ofSize: 11),
         ]))
 
@@ -370,15 +404,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Actions
 
     /// Focus (L3) : Terminal.app expose nativement le `tty` de chaque onglet en AppleScript
-    /// (`tty of tab`), donc pas besoin de plugin compagnon. On selectionne
-    /// directement l'onglet correspondant et on met sa fenetre au premier plan ; repli sur
-    /// une simple activation de Terminal si le tty n'est pas resolu ou introuvable.
-    @objc private func focusSession(_ sender: NSMenuItem) {
-        if let tty = sender.representedObject as? String {
-            Self.focusTerminalTab(tty: tty)
-        } else {
-            Self.activateTerminal()
-        }
+    /// (`tty of tab`), donc pas besoin de plugin compagnon. On selectionne directement
+    /// l'onglet correspondant et on met sa fenetre au premier plan.
+    ///
+    /// Retourne nil pour une session non ciblable (tmux / SSH / detache) : la ligne reste
+    /// affichee, mais son corps est inerte - seule la croix de fermeture y repond.
+    private static func focusAction(for session: Session) -> (() -> Void)? {
+        guard session.focusable, let tty = session.tty else { return nil }
+        return { focusTerminalTab(tty: tty) }
     }
 
     /// Selectionne l'onglet Terminal.app dont le tty correspond et avance sa fenetre au
@@ -415,6 +448,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         proc.arguments = ["-e", "tell application \"Terminal\" to activate"]
         try? proc.run()
+    }
+
+    /// Fermeture d'une session depuis la croix de sa ligne : confirmation, puis arret du
+    /// process et fermeture de l'onglet Terminal (cf. `SessionControl`).
+    ///
+    /// L'arret est bloquant (jusqu'a ~4,5 s : periode de grace + SIGKILL). Il se joue donc
+    /// hors du thread principal, et hors de `workQueue` : cette file serie porte les
+    /// rafraichissements periodiques, qu'une attente de plusieurs secondes gelerait.
+    private func confirmAndCloseSession(_ session: Session) {
+        let label = Self.truncate(session.title ?? session.name ?? "pid \(session.pid)", 60)
+        let confirm = NSAlert()
+        confirm.alertStyle = .warning
+        confirm.messageText = "Fermer la session « \(label) » ?"
+        confirm.informativeText = "Le process claude (pid \(session.pid)) sera arrete "
+            + "- SIGTERM, puis SIGKILL en repli - et son onglet Terminal ferme. "
+            + "La conversation reste reprenable plus tard avec `claude --resume`."
+        confirm.addButton(withTitle: "Fermer la session")
+        confirm.addButton(withTitle: "Annuler")
+        NSApp.activate(ignoringOtherApps: true)
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = SessionControl.close(pid: session.pid, tty: session.tty)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if case .failure(let error) = result {
+                    // `.gone` : la session s'etait deja terminee d'elle-meme. Rien a signaler,
+                    // le rafraichissement fera simplement disparaitre la ligne.
+                    if case .gone = error {} else { Self.reportCloseFailure(error) }
+                }
+                self.refreshSessions()
+            }
+        }
+    }
+
+    private static func reportCloseFailure(_ error: SessionControl.CloseError) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "La session n'a pas pu etre fermee"
+        alert.informativeText = error.message
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 
     /// Options exposees dans le formulaire "Nouvelle session" (flags CLI `claude --help`).

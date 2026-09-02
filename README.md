@@ -123,6 +123,13 @@ et rend un menu natif.
   `/resume`, lu dans le journal `ai-title`) en gras avec puce de statut coloree, puis
   sous-ligne (statut, dossier, tty, attente). Clic = focus precis de l'onglet Terminal.app
   correspondant (le `tty` est deja porte pour L3, cf. ci-dessous).
+- **Fermer une session** : au survol d'une ligne, une croix apparait a droite. Apres
+  confirmation, elle arrete le process `claude` (SIGTERM, puis SIGKILL en repli au bout de
+  3 s) puis ferme son onglet Terminal. Garde-fou avant tout signal : le pid est reverifie via
+  `ps` et doit porter `claude` (un fichier d'etat peut designer un pid deja recycle par le
+  systeme). Une fenetre a onglet unique est fermee ; dans une fenetre multi-onglets, seul le
+  shell de l'onglet vise recoit `exit` - Terminal n'expose pas de fermeture d'onglet isolee
+  qui soit sure pour les onglets voisins, qui peuvent porter d'autres sessions.
 - **Footer** : `Session` et `Semaine` avec mini-barre + pourcentage (via `usage.py`, couleur
   selon la severite), et sous-ligne d'echeance de reset en heure locale (`reset 17h10` si
   c'est aujourd'hui, `reset 31/08 13h00` sinon), ou `Usage indisponible` a defaut - jamais
